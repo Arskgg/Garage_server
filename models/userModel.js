@@ -1,13 +1,12 @@
 import mongoose from "mongoose";
 
 const userSchema = mongoose.Schema({
-  userName: { type: String, required: true },
+  username: { type: String, required: true },
   email: { type: String, required: true },
   password: { type: String, required: true },
-  posts_id: { type: [String], default: [] },
   followers: { type: [String], default: [] },
   follow: { type: [String], default: [] },
-  img: String,
+  img: { type: String, default: "" },
   createdAt: {
     type: Date,
     default: new Date(),
