@@ -1,5 +1,6 @@
 import express from "express";
 import postController from "../controllers/postController.js";
+import authMiddleware from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 router.get("/", postController.getAll);
