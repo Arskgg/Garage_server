@@ -10,6 +10,7 @@ export default function (req, res, next) {
 
     const decode = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
     req.user = decode;
+
     next();
   } catch (error) {
     res.status(401).json({ message: "Unauthorized" });

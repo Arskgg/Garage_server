@@ -2,16 +2,17 @@ import bcrypt from "bcrypt";
 import ApiError from "../error/ApiError.js";
 import User from "../models/userModel.js";
 import jwt from "jsonwebtoken";
+import UserDto from "../dtos/user_dto.js";
 
-const generateAccessJwt = (id, email, username) => {
-  return jwt.sign({ id, email, username }, process.env.ACCESS_TOKEN_SECRET, {
-    expiresIn: "12h",
+const generateAccessJwt = (userDto) => {
+  return jwt.sign({ ...userDto }, process.env.ACCESS_TOKEN_SECRET, {
+    expiresIn: "24h",
   });
 };
 
-const generateRefreshJwt = (id, email, username) => {
-  return jwt.sign({ id, email, username }, process.env.REFRESH_TOKEN_SECRET, {
-    expiresIn: "14d",
+const generateRefreshJwt = (userDto) => {
+  return jwt.sign({ ...userDto }, process.env.REFRESH_TOKEN_SECRET, {
+    expiresIn: "60d",
   });
 };
 
@@ -31,13 +32,11 @@ class UserController {
 
       if (!matchPassword) return next(ApiError.badRequest("Invalid data"));
 
-      const token = generateAccessJwt(user._id, user.email, user.username);
+      const userDto = new UserDto(user);
 
-      const refreshToken = generateRefreshJwt(
-        user._id,
-        user.email,
-        user.username
-      );
+      const token = generateAccessJwt(userDto);
+
+      const refreshToken = generateRefreshJwt(userDto);
 
       res.cookie("jwt", refreshToken, {
         httpOnly: true,
@@ -48,7 +47,7 @@ class UserController {
 
       res.json({ token });
     } catch (error) {
-      console.log({ message: error.message });
+      return next(ApiError.internal(error.message));
     }
   }
 
@@ -56,7 +55,7 @@ class UserController {
     const { email, password, username } = req.body;
 
     try {
-      if (!email || !password)
+      if (!email || !password || username)
         return next(ApiError.badRequest("All fields are required"));
 
       const existingUser = await User.findOne({ email });
@@ -72,13 +71,11 @@ class UserController {
         username,
       });
 
-      const token = generateAccessJwt(user._id, user.email, user.username);
+      const userDto = new UserDto(user);
 
-      const refreshToken = generateRefreshJwt(
-        user._id,
-        user.email,
-        user.username
-      );
+      const token = generateAccessJwt(userDto);
+
+      const refreshToken = generateRefreshJwt(userDto);
 
       res.cookie("jwt", refreshToken, {
         httpOnly: true,
@@ -89,21 +86,30 @@ class UserController {
 
       res.json({ token });
     } catch (error) {
-      console.log({ message: error.message });
+      return next(ApiError.internal(error.message));
     }
   }
 
   async refresh(req, res, next) {
     const { cookies } = req;
 
-    if (!cookies?.jwt) return next(ApiError.badRequest("Unauthorized"));
+    try {
+      if (!cookies?.jwt) return next(ApiError.unauthorized("Unauthorized"));
 
-    const refreshToken = cookies.jwt;
+      const refreshToken = cookies.jwt;
 
-    const decode = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-    const token = generateAccessJwt(decode);
+      const decode = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
 
-    res.json({ token });
+      const user = await User.findById(decode.id);
+
+      const userDto = new UserDto(user);
+
+      const token = generateAccessJwt(userDto);
+
+      res.json({ token, user: userDto });
+    } catch (error) {
+      next(ApiError.unauthorized(error));
+    }
   }
 
   logout(req, res) {

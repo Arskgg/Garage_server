@@ -1,6 +1,11 @@
-import ApiError from "../error/ApiError.js";
 import Post from "../models/postModel.js";
 import mongoose from "mongoose";
+import { v4 as uuidv4 } from "uuid";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 class PostController {
   async getAll(req, res) {
@@ -40,15 +45,32 @@ class PostController {
   }
 
   async createPost(req, res) {
-    const data = req.body;
-
-    const newPost = new Post(data);
-
     try {
+      const data = req.body;
+      let imgs = [];
+
+      //Check is some files were send
+      if (req.files) {
+        const { imgs: files } = req.files;
+        if (Array.isArray(files)) imgs = files;
+        else imgs.push(files);
+      }
+
+      const fileNames = imgs.map((img) => uuidv4() + ".jpg");
+      imgs.forEach((img, i) => {
+        img.mv(path.resolve(__dirname, "..", "static", fileNames[i]));
+      });
+
+      const newPost = new Post({
+        ...data,
+        imgs: fileNames,
+        tags: JSON.parse(data.tags),
+      });
+
       await newPost.save();
-      res.json(newPost);
+      res.status(201).json(newPost);
     } catch (error) {
-      res.status(500).json({ message: error.message });
+      res.status(500).json(error.message);
     }
   }
 
