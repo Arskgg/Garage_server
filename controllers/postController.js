@@ -1,8 +1,11 @@
+import User from "../models/userModel.js";
 import Post from "../models/postModel.js";
+import Comment from "../models/commentModel.js";
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import { fileURLToPath } from "url";
+import CommentDto from "../dtos/comment_dto.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +26,7 @@ class PostController {
         .skip(offSet);
 
       res.json({
-        data: posts,
+        posts,
         currentPage: page,
         numberOfPages: Math.ceil(totalPosts / limit),
       });
@@ -92,8 +95,6 @@ class PostController {
 
   async likePost(req, res) {}
 
-  async commentPost(req, res) {}
-
   async deletePost(req, res) {
     const { id } = req.params;
 
@@ -107,6 +108,64 @@ class PostController {
     } catch (error) {
       res.json({ message: error.message });
     }
+  }
+
+  async commentPost(req, res) {
+    try {
+      const { id } = req.params;
+      const commentData = req.body;
+      const comment = await Comment.create(commentData);
+
+      const post = await Post.findByIdAndUpdate(
+        id,
+        { $push: { comments: comment._id } },
+        { new: true }
+      );
+
+      res.json({ message: "Comment has been added" });
+    } catch (error) {
+      res.json(errror);
+    }
+  }
+
+  async commentsByPostId(req, res) {
+    const { id } = req.params;
+
+    try {
+      const { comments: commentsId } = await Post.findById(id).select({
+        comments: 1,
+        _id: 0,
+      });
+
+      const comments = await Comment.find({ _id: { $in: commentsId } }).sort({
+        _id: -1,
+      });
+
+      const commentsWithUserData = await Promise.all(
+        comments.map(async (comment) => {
+          try {
+            let user = {};
+
+            user = await User.findById(comment.user_id).select({
+              username: 1,
+              img: 1,
+              _id: 0,
+            });
+
+            const commentDto = new CommentDto({
+              ...comment.toObject(),
+              ...user.toObject(),
+            });
+
+            return commentDto;
+          } catch (error) {
+            console.log(error);
+          }
+        })
+      );
+
+      res.json(commentsWithUserData);
+    } catch (error) {}
   }
 }
 

@@ -14,7 +14,7 @@ const postModel = mongoose.Schema({
   description: String,
   imgs: { type: [String], default: [] },
   tags: { type: [String], default: [] },
-  comments: { type: [{ user: String, comment: String }], default: [] },
+  comments: { type: [String], default: [] },
   likes: { type: [String], default: [] },
   createdAt: {
     type: Date,

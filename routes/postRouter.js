@@ -9,7 +9,8 @@ router.get("/:id", postController.getById);
 router.post("/", authMiddleware, postController.createPost);
 router.patch("/:id", postController.updatePost);
 router.patch("/:id/likePost", postController.likePost);
-router.patch("/:id/commentPost", postController.commentPost);
+router.post("/:id/commentPost", postController.commentPost);
+router.get("/:id/comments", postController.commentsByPostId);
 router.delete("/:id", postController.deletePost);
 
 export default router;

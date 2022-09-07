@@ -6,7 +6,7 @@ import UserDto from "../dtos/user_dto.js";
 
 const generateAccessJwt = (userDto) => {
   return jwt.sign({ ...userDto }, process.env.ACCESS_TOKEN_SECRET, {
-    expiresIn: "24h",
+    expiresIn: "30m",
   });
 };
 
@@ -53,9 +53,10 @@ class UserController {
 
   async registration(req, res, next) {
     const { email, password, username } = req.body;
+    console.log(req.body);
 
     try {
-      if (!email || !password || username)
+      if (!email || !password || !username)
         return next(ApiError.badRequest("All fields are required"));
 
       const existingUser = await User.findOne({ email });
@@ -117,6 +118,24 @@ class UserController {
     if (!cookies?.jwt) return res.sendStatus(204);
     res.clearCookie("jwt", { httpOnly: true, secure: true, sameSite: "None" });
     res.json({ message: "Cookie cleared" });
+  }
+
+  async getUser(req, res, next) {
+    const { id } = req.params;
+
+    try {
+      const user = await User.findById(id);
+
+      if (!user) {
+        return ApiError.badRequest("User doesn't exist");
+      }
+
+      const userDto = new UserDto(user);
+
+      res.json(userDto);
+    } catch (error) {
+      next(ApiError.badRequest("User doesn't exist"));
+    }
   }
 }
 
