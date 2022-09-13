@@ -3,6 +3,13 @@ import ApiError from "../error/ApiError.js";
 import User from "../models/userModel.js";
 import jwt from "jsonwebtoken";
 import UserDto from "../dtos/user_dto.js";
+import mongoose from "mongoose";
+import { v4 as uuidv4 } from "uuid";
+import { fileURLToPath } from "url";
+import path from "path";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+import fs from "fs";
 
 const generateAccessJwt = (userDto) => {
   return jwt.sign({ ...userDto }, process.env.ACCESS_TOKEN_SECRET, {
@@ -127,14 +134,134 @@ class UserController {
       const user = await User.findById(id);
 
       if (!user) {
-        return ApiError.badRequest("User doesn't exist");
+        return next(ApiError.badRequest("User doesn't exist"));
       }
 
       const userDto = new UserDto(user);
 
       res.json(userDto);
     } catch (error) {
-      next(ApiError.badRequest("User doesn't exist"));
+      return next(ApiError.badRequest("User doesn't exist"));
+    }
+  }
+
+  async updateUser(req, res, next) {
+    const { id } = req.params;
+
+    const { img } = req.files;
+
+    try {
+      const filename = uuidv4() + ".jpg";
+      img.mv(path.resolve(__dirname, "..", "static", filename));
+
+      const newUser = await User.findByIdAndUpdate(
+        id,
+        { img: filename },
+        { new: true }
+      );
+
+      res.json(newUser);
+    } catch (error) {
+      res.json(error);
+    }
+  }
+
+  async followUser(req, res, next) {
+    const { id } = req.params;
+    const { followerId } = req.body;
+    let isFollowing = true;
+
+    try {
+      const user = await User.findById(id);
+      const followUser = await User.findById(followerId);
+
+      if (!user) {
+        return next(
+          ApiError.badRequest("User that you want to follow doesn't exist")
+        );
+      }
+
+      if (!followUser) {
+        return next(
+          ApiError.badRequest("User that want to follow doesn't exist")
+        );
+      }
+
+      const indexUser = user.followers.findIndex((id) => id === followerId);
+
+      if (indexUser === -1) {
+        user.followers.push(followerId);
+        followUser.follow.push(id);
+      } else {
+        user.followers = user.followers.filter((id) => id !== followerId);
+        followUser.follow = followUser.follow.filter(
+          (followerId) => followerId !== id
+        );
+        isFollowing = false;
+      }
+
+      const updatedUser = await User.findByIdAndUpdate(id, user, { new: true });
+      const updatedFollower = await User.findByIdAndUpdate(
+        followerId,
+        followUser,
+        { new: true }
+      );
+
+      res.json({
+        message: isFollowing
+          ? "Follow was successful"
+          : "Unfollow was successful",
+      });
+    } catch (error) {
+      res.json(error);
+    }
+  }
+
+  async getUserFollowers(req, res, next) {
+    const { id } = req.params;
+
+    try {
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return next(ApiError.badRequest("User doesn't exist"));
+      }
+
+      const user = await User.findById(id);
+
+      if (!user) {
+        return next(ApiError.badRequest("User doesn't exist"));
+      }
+
+      const followers = await User.find({
+        _id: { $in: user.followers },
+      }).select({ username: 1, img: 1 });
+
+      res.json(followers);
+    } catch (error) {
+      res.json(error);
+    }
+  }
+
+  async getUserFollowing(req, res, next) {
+    const { id } = req.params;
+
+    try {
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return next(ApiError.badRequest("User doesn't exist"));
+      }
+
+      const user = await User.findById(id);
+
+      if (!user) {
+        return next(ApiError.badRequest("User doesn't exist"));
+      }
+
+      const following = await User.find({
+        _id: { $in: user.follow },
+      }).select({ username: 1, img: 1 });
+
+      res.json(following);
+    } catch (error) {
+      res.json(error);
     }
   }
 }

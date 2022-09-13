@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import { fileURLToPath } from "url";
 import CommentDto from "../dtos/comment_dto.js";
+import ApiError from "../error/ApiError.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,14 +16,14 @@ class PostController {
     let { limit, page } = req.query;
 
     page = page || 1;
-    limit = limit || 9;
+    limit = limit || 6;
     const offSet = page * limit - limit;
     const totalPosts = await Post.countDocuments({});
 
     try {
       const posts = await Post.find()
         .sort({ _id: -1 })
-        .limit({ limit })
+        .limit(limit)
         .skip(offSet);
 
       res.json({
@@ -90,6 +91,29 @@ class PostController {
       res.status(200).json(updatedPost);
     } catch (error) {
       res.status(404).json({ message: error.message });
+    }
+  }
+
+  async getUserPosts(req, res, next) {
+    const { id } = req.params;
+
+    try {
+      if (!mongoose.Types.ObjectId.isValid(id))
+        return next(ApiError.badRequest("User doesn't exist"));
+
+      const user = await User.findById(id);
+
+      if (!user) return next(ApiError.badRequest("User doesn't exist"));
+
+      const posts = await Post.find({ user_id: { $in: id } })
+        .select({ carMake: 1, carModel: 1, imgs: 1 })
+        .sort({
+          _id: -1,
+        });
+
+      res.json(posts);
+    } catch (error) {
+      res.json(error);
     }
   }
 
