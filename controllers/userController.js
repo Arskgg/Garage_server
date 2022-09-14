@@ -148,15 +148,25 @@ class UserController {
   async updateUser(req, res, next) {
     const { id } = req.params;
 
-    const { img } = req.files;
-
     try {
-      const filename = uuidv4() + ".jpg";
-      img.mv(path.resolve(__dirname, "..", "static", filename));
+      if (req.files) {
+        const { img } = req.files;
+
+        const filename = uuidv4() + ".jpg";
+        img.mv(path.resolve(__dirname, "..", "static", filename));
+
+        const newUser = await User.findByIdAndUpdate(
+          id,
+          { img: filename },
+          { new: true }
+        );
+
+        return res.json(newUser);
+      }
 
       const newUser = await User.findByIdAndUpdate(
         id,
-        { img: filename },
+        { img: "" },
         { new: true }
       );
 

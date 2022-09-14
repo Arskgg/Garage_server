@@ -23,7 +23,7 @@ class PostController {
     try {
       const posts = await Post.find()
         .sort({ _id: -1 })
-        .limit(limit)
+        // .limit(limit)
         .skip(offSet);
 
       res.json({
@@ -79,18 +79,39 @@ class PostController {
   }
 
   async updatePost(req, res) {
-    const { id: _id } = req.params;
+    const { id } = req.params;
     const post = req.body;
+    let imgs = [];
 
-    if (!mongoose.Types.ObjectId.isValid(_id))
-      return res.status(404).send("No post with that id");
     try {
-      const updatedPost = await Post.findByIdAndUpdate(_id, post, {
-        new: true,
-      });
-      res.status(200).json(updatedPost);
+      if (req.files) {
+        const { imgs: files } = req.files;
+        if (Array.isArray(files)) imgs = files;
+        else imgs.push(files);
+
+        const fileNames = imgs.map((img) => uuidv4() + ".jpg");
+        imgs.forEach((img, i) => {
+          img.mv(path.resolve(__dirname, "..", "static", fileNames[i]));
+        });
+
+        const updatedPost = await Post.findByIdAndUpdate(id, {
+          ...post,
+          imgs: fileNames,
+          tags: JSON.parse(post.tags),
+        });
+
+        return res.json(updatedPost);
+      }
+
+      const updatedPost = await Post.findByIdAndUpdate(
+        id,
+        { ...post, tags: JSON.parse(post.tags) },
+        { new: true }
+      );
+
+      return res.json(updatedPost);
     } catch (error) {
-      res.status(404).json({ message: error.message });
+      res.json(error);
     }
   }
 
@@ -106,7 +127,7 @@ class PostController {
       if (!user) return next(ApiError.badRequest("User doesn't exist"));
 
       const posts = await Post.find({ user_id: { $in: id } })
-        .select({ carMake: 1, carModel: 1, imgs: 1 })
+        .select({ carMake: 1, carModel: 1, imgs: 1, user_id: 1 })
         .sort({
           _id: -1,
         });
