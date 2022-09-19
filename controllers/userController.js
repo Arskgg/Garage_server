@@ -10,6 +10,7 @@ import path from "path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import fs from "fs";
+import sharp from "sharp";
 
 const generateAccessJwt = (userDto) => {
   return jwt.sign({ ...userDto }, process.env.ACCESS_TOKEN_SECRET, {
@@ -37,7 +38,7 @@ class UserController {
 
       const matchPassword = await bcrypt.compare(password, user.password);
 
-      if (!matchPassword) return next(ApiError.badRequest("Invalid data"));
+      if (!matchPassword) return next(ApiError.badRequest("Invalid password"));
 
       const userDto = new UserDto(user);
 
@@ -60,16 +61,24 @@ class UserController {
 
   async registration(req, res, next) {
     const { email, password, username } = req.body;
-    console.log(req.body);
 
     try {
       if (!email || !password || !username)
-        return next(ApiError.badRequest("All fields are required"));
+        return next(ApiError.badRequest("All fields are required!"));
 
-      const existingUser = await User.findOne({ email });
+      const existingEmail = await User.findOne({ email });
 
-      if (existingUser)
-        return next(ApiError.badRequest("User with this email already exists"));
+      if (existingEmail)
+        return next(
+          ApiError.badRequest("User with this email already exists!")
+        );
+
+      const existingUsername = await User.findOne({ username });
+
+      if (existingUsername)
+        return next(
+          ApiError.badRequest("User with this username already exists!")
+        );
 
       const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -151,26 +160,33 @@ class UserController {
     try {
       if (req.files) {
         const { img } = req.files;
-
         const filename = uuidv4() + ".jpg";
-        img.mv(path.resolve(__dirname, "..", "static", filename));
 
-        const newUser = await User.findByIdAndUpdate(
-          id,
-          { img: filename },
-          { new: true }
-        );
+        sharp(img.data)
+          .jpeg()
+          .resize(150, null, { withoutEnlargement: true })
+          .toFile(path.resolve(__dirname, "..", "static", filename));
 
-        return res.json(newUser);
+        const user = await User.findById(id);
+
+        if (user.img) {
+          fs.unlinkSync(path.resolve(__dirname, "..", "static", user.img));
+        }
+
+        user.img = filename;
+        user.save();
+
+        return res.json(user);
       }
 
-      const newUser = await User.findByIdAndUpdate(
-        id,
-        { img: "" },
-        { new: true }
-      );
+      const user = await User.findById(id);
 
-      res.json(newUser);
+      fs.unlinkSync(path.resolve(__dirname, "..", "static", user.img));
+
+      user.img = "";
+      user.save();
+
+      res.json(user);
     } catch (error) {
       res.json(error);
     }

@@ -7,13 +7,15 @@ import path from "path";
 import { fileURLToPath } from "url";
 import CommentDto from "../dtos/comment_dto.js";
 import ApiError from "../error/ApiError.js";
+import sharp from "sharp";
+import fs from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 class PostController {
   async getAll(req, res) {
-    let { limit, page } = req.query;
+    let { limit, page, search } = req.query;
 
     page = page || 1;
     limit = limit || 6;
@@ -21,10 +23,32 @@ class PostController {
     const totalPosts = await Post.countDocuments({});
 
     try {
+      if (search) {
+        const searchInsensitive = new RegExp(search, "i");
+
+        const posts = await Post.find({
+          $or: [
+            { carMake: searchInsensitive },
+            { carModel: searchInsensitive },
+            { tags: { $in: searchInsensitive } },
+          ],
+        })
+          .populate("user_id", "_id username img")
+          .select("-__v");
+
+        return res.json({
+          posts,
+          currentPage: page,
+          numberOfPages: Math.ceil(totalPosts / limit),
+        });
+      }
+
       const posts = await Post.find()
-        .sort({ _id: -1 })
-        // .limit(limit)
-        .skip(offSet);
+        .populate("user_id", "_id username img")
+        .select("-__v");
+      // .sort({ _id: -1 })
+      // .limit(limit)
+      // .skip(offSet);
 
       res.json({
         posts,
@@ -62,7 +86,10 @@ class PostController {
 
       const fileNames = imgs.map((img) => uuidv4() + ".jpg");
       imgs.forEach((img, i) => {
-        img.mv(path.resolve(__dirname, "..", "static", fileNames[i]));
+        sharp(img.data)
+          .jpeg()
+          .resize(1740, null, { withoutEnlargement: true })
+          .toFile(path.resolve(__dirname, "..", "static", fileNames[i]));
       });
 
       const newPost = new Post({
@@ -72,6 +99,7 @@ class PostController {
       });
 
       await newPost.save();
+
       res.status(201).json(newPost);
     } catch (error) {
       res.status(500).json(error.message);
@@ -80,34 +108,51 @@ class PostController {
 
   async updatePost(req, res) {
     const { id } = req.params;
-    const post = req.body;
+    const updatedPostData = req.body;
     let imgs = [];
 
     try {
+      const oldPost = await Post.findById(id);
+
       if (req.files) {
         const { imgs: files } = req.files;
         if (Array.isArray(files)) imgs = files;
         else imgs.push(files);
 
         const fileNames = imgs.map((img) => uuidv4() + ".jpg");
+
         imgs.forEach((img, i) => {
-          img.mv(path.resolve(__dirname, "..", "static", fileNames[i]));
+          sharp(img.data)
+            .jpeg()
+            .resize(1740, null, { withoutEnlargement: true })
+            .toFile(path.resolve(__dirname, "..", "static", fileNames[i]));
         });
 
+        oldPost.imgs.forEach((img) =>
+          fs.unlinkSync(path.resolve(__dirname, "..", "static", img))
+        );
+
         const updatedPost = await Post.findByIdAndUpdate(id, {
-          ...post,
+          ...updatedPostData,
           imgs: fileNames,
-          tags: JSON.parse(post.tags),
+          tags: JSON.parse(updatedPostData.tags),
         });
 
         return res.json(updatedPost);
       }
 
-      const updatedPost = await Post.findByIdAndUpdate(
-        id,
-        { ...post, tags: JSON.parse(post.tags) },
-        { new: true }
+      const deletedImages = oldPost.imgs.filter(
+        (img) => !updatedPostData.imgs.includes(img)
       );
+
+      deletedImages.forEach((img) =>
+        fs.unlinkSync(path.resolve(__dirname, "..", "static", img))
+      );
+
+      const updatedPost = await Post.findByIdAndUpdate(id, {
+        ...updatedPostData,
+        tags: JSON.parse(updatedPostData.tags),
+      });
 
       return res.json(updatedPost);
     } catch (error) {
@@ -147,7 +192,16 @@ class PostController {
       return res.status(404).send("No post with that id");
 
     try {
+      const { imgs: postImgs } = await Post.findById(id).select({
+        imgs: 1,
+        _id: 0,
+      });
+
       await Post.findByIdAndRemove(id);
+
+      postImgs.forEach((img) =>
+        fs.unlinkSync(path.resolve(__dirname, "..", "static", img))
+      );
 
       res.json({ message: "Post deleted successfuly" });
     } catch (error) {

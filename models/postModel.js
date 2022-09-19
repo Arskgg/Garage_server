@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const postModel = mongoose.Schema({
-  user_id: String,
+  user_id: { type: String, ref: "User" },
   carMake: String,
   carModel: String,
   type: String,
