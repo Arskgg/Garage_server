@@ -1,11 +1,9 @@
 import User from "../models/userModel.js";
 import Post from "../models/postModel.js";
-import Comment from "../models/commentModel.js";
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import { fileURLToPath } from "url";
-import CommentDto from "../dtos/comment_dto.js";
 import ApiError from "../error/ApiError.js";
 import sharp from "sharp";
 import fs from "fs";
@@ -45,8 +43,8 @@ class PostController {
 
       const posts = await Post.find()
         .populate("user_id", "_id username img")
-        .select("-__v");
-      // .sort({ _id: -1 })
+        .select("-__v")
+        .sort({ _id: -1 });
       // .limit(limit)
       // .skip(offSet);
 
@@ -87,7 +85,7 @@ class PostController {
       const fileNames = imgs.map((img) => uuidv4() + ".jpg");
       imgs.forEach((img, i) => {
         sharp(img.data)
-          .jpeg()
+          .jpeg({ chromaSubsampling: "4:4:4" })
           .resize(1740, null, { withoutEnlargement: true })
           .toFile(path.resolve(__dirname, "..", "static", fileNames[i]));
       });
@@ -183,8 +181,6 @@ class PostController {
     }
   }
 
-  async likePost(req, res) {}
-
   async deletePost(req, res) {
     const { id } = req.params;
 
@@ -209,63 +205,7 @@ class PostController {
     }
   }
 
-  async commentPost(req, res) {
-    try {
-      const { id } = req.params;
-      const commentData = req.body;
-      const comment = await Comment.create(commentData);
-
-      const post = await Post.findByIdAndUpdate(
-        id,
-        { $push: { comments: comment._id } },
-        { new: true }
-      );
-
-      res.json({ message: "Comment has been added" });
-    } catch (error) {
-      res.json(errror);
-    }
-  }
-
-  async commentsByPostId(req, res) {
-    const { id } = req.params;
-
-    try {
-      const { comments: commentsId } = await Post.findById(id).select({
-        comments: 1,
-        _id: 0,
-      });
-
-      const comments = await Comment.find({ _id: { $in: commentsId } }).sort({
-        _id: -1,
-      });
-
-      const commentsWithUserData = await Promise.all(
-        comments.map(async (comment) => {
-          try {
-            let user = {};
-
-            user = await User.findById(comment.user_id).select({
-              username: 1,
-              img: 1,
-              _id: 0,
-            });
-
-            const commentDto = new CommentDto({
-              ...comment.toObject(),
-              ...user.toObject(),
-            });
-
-            return commentDto;
-          } catch (error) {
-            console.log(error);
-          }
-        })
-      );
-
-      res.json(commentsWithUserData);
-    } catch (error) {}
-  }
+  async likePost(req, res) {}
 }
 
 export default new PostController();

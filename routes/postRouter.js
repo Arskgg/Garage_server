@@ -1,4 +1,5 @@
 import express from "express";
+import commentController from "../controllers/commentController.js";
 import postController from "../controllers/postController.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 const router = express.Router();
@@ -9,8 +10,8 @@ router.get("/user/:id", postController.getUserPosts);
 router.post("/", postController.createPost);
 router.patch("/:id", postController.updatePost);
 router.patch("/:id/likePost", postController.likePost);
-router.post("/:id/commentPost", postController.commentPost);
-router.get("/:id/comments", postController.commentsByPostId);
+router.get("/:id/comments", commentController.commentsByPostId);
+router.post("/:id/commentPost", commentController.commentPost);
 router.delete("/:id", postController.deletePost);
 
 export default router;
